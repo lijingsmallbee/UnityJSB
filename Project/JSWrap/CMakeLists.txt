@@ -46,16 +46,19 @@ if(APPLE)
 		include_directories(
 	    ${CMAKE_SOURCE_DIR}/iOS/include/v8
 	)
-	else
+	else()
 		include_directories(
-	    ${CMAKE_SOURCE_DIR}/Mac/include/v8
+        ${CMAKE_SOURCE_DIR}/Mac/include/v8
+    )
 	endif()
 elseif(ANDROID)
 	include_directories(
-	    ${CMAKE_SOURCE_DIR}/Android/${ANDROID_ABI}/include/v8
+        ${CMAKE_SOURCE_DIR}/Android/${ANDROID_ABI}/include/v8
+    )
 elseif(WIN32)
 	include_directories(
-	    ${CMAKE_SOURCE_DIR}/Win32/include/v8
+        ${CMAKE_SOURCE_DIR}/Win32/include/v8
+)
 endif()
 
 
@@ -125,8 +128,7 @@ if(APPLE)
 		target_link_libraries(jswrap
             ${CMAKE_SOURCE_DIR}/iOS/libs/libv8_monolith.a
         )
-	)
-	else
+	else()
 		target_link_libraries(jswrap
             ${CMAKE_SOURCE_DIR}/Mac/libs/libv8_monolith.a
         )
