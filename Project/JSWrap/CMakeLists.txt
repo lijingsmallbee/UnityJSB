@@ -42,12 +42,15 @@ set(LUAJIT_SRC_PATH luajit-2.1.0b3/src)
 #	configure_file ( ${LUA_SRC_PATH}/luaconf.h.in ${CMAKE_CURRENT_BINARY_DIR}/luaconf.h )
 
 if(APPLE)
+
 	if(IOS)
+        message(WARNING "build ios include")
 		include_directories(
 	    ${CMAKE_SOURCE_DIR}/iOS/include/v8
 	)
 	else()
-		include_directories(
+    message(WARNING "build osx include")
+	include_directories(
         ${CMAKE_SOURCE_DIR}/Mac/include/v8
     )
 	endif()
@@ -129,6 +132,7 @@ if(APPLE)
             ${CMAKE_SOURCE_DIR}/iOS/libs/libv8_monolith.a
         )
 	else()
+        message(WARNING "link lib v8")
 		target_link_libraries(jswrap
             ${CMAKE_SOURCE_DIR}/Mac/libs/libv8_monolith.a
         )
