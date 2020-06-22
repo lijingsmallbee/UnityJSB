@@ -89,6 +89,7 @@ if (APPLE)
         set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD)")
         add_library(jswrap STATIC
            ${JS_Code}
+           jswrap.cpp
         )
 		set_xcode_property (jswrap IPHONEOS_DEPLOYMENT_TARGET "7.0" "all")
     else ()
@@ -96,6 +97,7 @@ if (APPLE)
         set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD_64_BIT)")
         add_library(jswrap MODULE
             ${JS_Code}
+            jswrap.cpp
         )
         set_target_properties ( jswrap PROPERTIES BUNDLE TRUE )
         #set_target_properties ( xlua PROPERTIES FRAMEWORK TRUE )
@@ -104,11 +106,13 @@ if (APPLE)
 elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Switch")
     add_library(jswrap STATIC
         ${JS_Code}
+        jswrap.cpp
     )
     target_compile_options(jswrap PRIVATE -m64 -mcpu=cortex-a57+fp+simd+crypto+crc -fno-common -fno-short-enums -ffunction-sections -fdata-sections -fPIC -fms-extensions)
 else ( )
     add_library(jswrap SHARED
         ${JS_Code}
+        jswrap.cpp
     )
 endif ( )
 
