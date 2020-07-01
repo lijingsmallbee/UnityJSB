@@ -12,6 +12,8 @@
 extern "C"
 {
     v8::Platform* g_platform;
+    
+    v8::Persistent<v8::Context> _context;
 /*    void sc_finalize(JSFreeOp* freeOp, JSObject* obj)
     {
 
@@ -24,6 +26,90 @@ extern "C"
         JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, sc_finalize,
         JSCLASS_NO_OPTIONAL_MEMBERS
     };  */
+    
+    void onFatalErrorCallback(const char* location, const char* message)
+    {
+        std::string errorStr = "[FATAL ERROR] location: ";
+        errorStr += location;
+        errorStr += ", message: ";
+        errorStr += message;
+        
+        SE_LOGE("%s\n", errorStr.c_str());
+        if (getInstance()->_exceptionCallback != nullptr)
+        {
+            getInstance()->_exceptionCallback(location, message, "(no stack information)");
+        }
+    }
+    
+    void onOOMErrorCallback(const char* location, bool is_heap_oom)
+    {
+        std::string errorStr = "[OOM ERROR] location: ";
+        errorStr += location;
+        std::string message;
+        message = "is heap out of memory: ";
+        if (is_heap_oom)
+            message += "true";
+        else
+            message += "false";
+        
+        errorStr += ", " + message;
+    }
+    
+    void onMessageCallback(v8::Local<v8::Message> message, v8::Local<v8::Value> data)
+    {
+        ScriptEngine* thiz = getInstance();
+        v8::Local<v8::String> msg = message->Get();
+        Value msgVal;
+        internal::jsToSeValue(v8::Isolate::GetCurrent(), msg, &msgVal);
+        assert(msgVal.isString());
+        v8::ScriptOrigin origin = message->GetScriptOrigin();
+        Value resouceNameVal;
+        internal::jsToSeValue(v8::Isolate::GetCurrent(), origin.ResourceName(), &resouceNameVal);
+        Value line;
+        internal::jsToSeValue(v8::Isolate::GetCurrent(), origin.ResourceLineOffset(), &line);
+        Value column;
+        internal::jsToSeValue(v8::Isolate::GetCurrent(), origin.ResourceColumnOffset(), &column);
+        
+        std::string location = resouceNameVal.toStringForce() + ":" + line.toStringForce() + ":" + column.toStringForce();
+        
+        std::string errorStr = msgVal.toString() + ", location: " + location;
+        std::string stackStr = stackTraceToString(message->GetStackTrace());
+        if (!stackStr.empty())
+        {
+            if (line.toInt32() == 0)
+            {
+                location = "(see stack)";
+            }
+            errorStr += "\nSTACK:\n" + stackStr;
+        }
+        
+        if (thiz->_exceptionCallback != nullptr)
+        {
+            thiz->_exceptionCallback(location.c_str(), msgVal.toString().c_str(), stackStr.c_str());
+        }
+        
+        if (!thiz->_isErrorHandleWorking)
+        {
+            thiz->_isErrorHandleWorking = true;
+            
+            Value errorHandler;
+            if (thiz->_globalObj->getProperty("__errorHandler", &errorHandler) && errorHandler.isObject() && errorHandler.toObject()->isFunction())
+            {
+                ValueArray args;
+                args.push_back(resouceNameVal);
+                args.push_back(line);
+                args.push_back(msgVal);
+                args.push_back(Value(stackStr));
+                errorHandler.toObject()->call(args, thiz->_globalObj);
+            }
+            
+            thiz->_isErrorHandleWorking = false;
+        }
+        else
+        {
+            SE_LOGE("ERROR: __errorHandler has exception\n");
+        }
+    }
 
     static JSClass qiucw_class = 
     {
@@ -46,31 +132,50 @@ extern "C"
         v8::V8::ShutdownPlatform();
         delete g_platform;
     }
-    DLLEXPORT JSRuntime* JSh_NewRuntime(uint32_t maxbytes, int useHelperThreads) 
-    { 
-        return JS_NewRuntime(maxbytes, (JSUseHelperThreads)useHelperThreads); 
+    DLLEXPORT v8::Isolate* JSh_NewIsolate(uint32_t stackFrameLimit)
+    {
+        v8::Isolate::CreateParams create_params;
+        create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+        v8::Isolate* _isolate = v8::Isolate::New(create_params);
+        v8::HandleScope hs(_isolate);
+        _isolate->Enter();
+        
+        _isolate->SetCaptureStackTraceForUncaughtExceptions(true, stackFrameLimit, v8::StackTrace::kOverview);
+        
+        _isolate->SetFatalErrorHandler(onFatalErrorCallback);
+        _isolate->SetOOMErrorHandler(onOOMErrorCallback);
+        _isolate->AddMessageListener(onMessageCallback);
+        return _isolate;
     }
-    DLLEXPORT void JSh_DestroyRuntime(JSRuntime *rt) 
-    { 
-        JS_DestroyRuntime(rt); 
+    DLLEXPORT void JSh_DestroyIsolate(v8::Isolate* iso)
+    {
+        if(iso != nullptr)
+        {
+            iso->Exit();
+            iso->Dispose();
+            iso = nullptr;
+        }
     }
-    DLLEXPORT void JSh_SetGCParameter(JSRuntime *rt, int key, uint32_t value) 
+ /*   DLLEXPORT void JSh_SetGCParameter(JSRuntime *rt, int key, uint32_t value)
     { 
         return JS_SetGCParameter(rt, (JSGCParamKey)key, value); 
-    }
+    } */
 
-    DLLEXPORT JSContext* JSh_NewContext(JSRuntime *rt, size_t stackChunkSize) 
-    { 
-        return JS_NewContext(rt, stackChunkSize); 
+    DLLEXPORT v8::Context* JSh_NewContext(v8::Isolate *iso, size_t stackChunkSize)
+    {
+        _context.Reset(iso, v8::Context::New(iso));
+        _context.Get(iso)->Enter();
+        return &_context;
     }
-    DLLEXPORT void JSh_DestroyContext(JSContext *cx) 
-    { 
-        JS_DestroyContext(cx); 
+    DLLEXPORT void JSh_DestroyContext(v8::Context *cx,v8::Isolate* iso)
+    {
+        cx->Get(iso)->Exit();
+        cx->Reset();
     }
-    DLLEXPORT void JSh_DestroyContextNoGC(JSContext *cx) 
+ /*   DLLEXPORT void JSh_DestroyContextNoGC(JSContext *cx)
     { 
         JS_DestroyContextNoGC(cx); 
-    }
+    } */
 
     DLLEXPORT JSErrorReporter JSh_SetErrorReporter(JSContext *cx, JSErrorReporter er) 
     { 
@@ -645,4 +750,7 @@ extern "C"
     {
         JS_SetNativeStackQuota(cx, systemCodeStackSize, trustedScriptStackSize, untrustedScriptStackSize);
     }
+    
+    
+    
 };
