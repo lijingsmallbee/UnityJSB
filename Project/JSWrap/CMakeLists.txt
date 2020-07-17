@@ -82,13 +82,16 @@ macro(source_group_by_dir proj_dir source_files)
     endif(MSVC OR APPLE)
 endmacro(source_group_by_dir)
 
-aux_source_directory(./v8_source/debugger JS_Code)
+aux_source_directory(./v8_source/debugger JS_CodeDebugger)
+aux_source_directory(./v8_source JS_Code)
+aux_source_directory(./ JS_Base)
 
 if (APPLE)
     if (IOS)
         set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD)")
         add_library(jswrap STATIC
            ${JS_Code}
+           ${JS_CodeDebugger}
            jswrap.cpp
         )
 		set_xcode_property (jswrap IPHONEOS_DEPLOYMENT_TARGET "7.0" "all")
@@ -97,15 +100,18 @@ if (APPLE)
         set(CMAKE_OSX_ARCHITECTURES "$(ARCHS_STANDARD_64_BIT)")
         add_library(jswrap MODULE
             ${JS_Code}
-            jswrap.cpp
+            ${JS_Base}
+            ${JS_CodeDebugger}
         )
         set_target_properties ( jswrap PROPERTIES BUNDLE TRUE )
+        target_compile_features(jswrap PRIVATE cxx_range_for)
         #set_target_properties ( xlua PROPERTIES FRAMEWORK TRUE )
         #set_target_properties ( xlua PROPERTIES MACOSX_RPATH TRUE )
     endif ()
 elseif ("${CMAKE_SYSTEM_NAME}" STREQUAL "Switch")
     add_library(jswrap STATIC
         ${JS_Code}
+        ${JS_CodeDebugger}
         jswrap.cpp
     )
     target_compile_options(jswrap PRIVATE -m64 -mcpu=cortex-a57+fp+simd+crypto+crc -fno-common -fno-short-enums -ffunction-sections -fdata-sections -fPIC -fms-extensions)
